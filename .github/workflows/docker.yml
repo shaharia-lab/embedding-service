@@ -1,15 +1,35 @@
-name: Docker Build and Publish
+name: Docker Build and Test
 
 on:
   pull_request:
-    branches: [ master ]
+    branches: [ main ]
   push:
-    branches: [ master ]
+    branches: [ main ]
   release:
     types: [ published ]
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: |
+          pytest --cov=app tests/ -v
+
   build:
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
