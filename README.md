@@ -14,7 +14,13 @@ A FastAPI-based service that provides text embeddings using various Sentence Tra
 
 ## Quick Start
 
-### Using Docker
+### Option 1: Using Pre-built Docker Image
+
+```bash
+docker run -p 8000:8000 ghcr.io/shaharia-lab/embedding-service:latest
+```
+
+### Option 2: Building Docker Image from Source
 
 ```bash
 # Build the image
@@ -24,7 +30,7 @@ docker build -t embedding-service .
 docker run -p 8000:8000 embedding-service
 ```
 
-### Local Development
+### Option 3: Local Development
 
 1. Create a virtual environment:
 ```bash
@@ -41,6 +47,8 @@ pip install -r requirements-dev.txt
 ```bash
 uvicorn app.main:app --reload
 ```
+
+Once running, the API will be available at `http://localhost:8000`. You can visit `http://localhost:8000/docs` for interactive API documentation.
 
 ## API Usage
 
