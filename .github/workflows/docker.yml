@@ -2,15 +2,24 @@ name: Docker Build and Test
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [ master ]
   push:
-    branches: [ main ]
+    branches: [ master ]
   release:
     types: [ published ]
+
+# Add top-level concurrency to cancel any in-progress workflow runs for PRs
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    # Add job-level concurrency for more granular control
+    concurrency:
+      group: test-${{ github.ref }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
 
@@ -31,6 +40,10 @@ jobs:
   build:
     needs: test
     runs-on: ubuntu-latest
+    # Add job-level concurrency for the build job
+    concurrency:
+      group: build-${{ github.ref }}
+      cancel-in-progress: true
     permissions:
       contents: read
       packages: write
