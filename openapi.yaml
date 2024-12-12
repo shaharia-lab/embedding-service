@@ -1,0 +1,162 @@
+openapi: 3.0.2
+info:
+  title: Code Embedding Service
+  version: 1.0.0
+paths:
+  /v1/embeddings:
+    post:
+      summary: Create embeddings for input text
+      operationId: create_embedding
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmbeddingRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmbeddingResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+
+  /health:
+    get:
+      summary: Health check endpoint
+      operationId: health_check
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "healthy"
+
+components:
+  schemas:
+    EmbeddingRequest:
+      type: object
+      required:
+        - input
+      properties:
+        input:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: string
+          description: The text to embed. Can be a string or an array of strings.
+        model:
+          type: string
+          default: all-MiniLM-L6-v2
+          enum:
+            - all-MiniLM-L6-v2
+            - all-mpnet-base-v2
+            - paraphrase-multilingual-MiniLM-L12-v2
+          description: ID of the model to use for embedding
+        encoding_format:
+          type: string
+          default: float
+          enum:
+            - float
+          description: The format of the output embeddings
+
+    EmbeddingObject:
+      type: object
+      required:
+        - object
+        - embedding
+        - index
+      properties:
+        object:
+          type: string
+          enum:
+            - embedding
+        embedding:
+          type: array
+          items:
+            type: number
+            format: float
+          description: The embedding vector
+        index:
+          type: integer
+          description: Index of this embedding in the request
+
+    Usage:
+      type: object
+      required:
+        - prompt_tokens
+        - total_tokens
+      properties:
+        prompt_tokens:
+          type: integer
+          description: Number of tokens in the prompt
+        total_tokens:
+          type: integer
+          description: Total number of tokens used
+
+    EmbeddingResponse:
+      type: object
+      required:
+        - object
+        - data
+        - model
+        - usage
+      properties:
+        object:
+          type: string
+          enum:
+            - list
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/EmbeddingObject'
+        model:
+          type: string
+          description: The ID of the model used
+        usage:
+          $ref: '#/components/schemas/Usage'
+
+    ValidationError:
+      type: object
+      required:
+        - loc
+        - msg
+        - type
+      properties:
+        loc:
+          type: array
+          items:
+            type: string
+        msg:
+          type: string
+        type:
+          type: string
+
+    HTTPValidationError:
+      type: object
+      properties:
+        detail:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationError'
