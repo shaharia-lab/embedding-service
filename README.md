@@ -17,7 +17,7 @@ A FastAPI-based service that provides text embeddings using various Sentence Tra
 ### Option 1: Using Pre-built Docker Image
 
 ```bash
-docker run -p 8000:8000 ghcr.io/shaharia-lab/embedding-service:latest
+docker run -d --name embedding-service -p 8000:8000 ghcr.io/shaharia-lab/embedding-service:latest
 ```
 
 ### Option 2: Building Docker Image from Source
