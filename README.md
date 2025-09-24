@@ -77,6 +77,25 @@ payload = {
 }
 ```
 
+## Use OpenAI SDK
+
+```js
+import OpenAI from "openai";
+
+const openai = new OpenAI({
+  apiKey: "",
+  baseURL: "http://localhost:8000/v1"
+});
+
+const embedding = await openai.embeddings.create({
+  model: "all-MiniLM-L6-v2",
+  input: "Your text string goes here",
+  encoding_format: "float",
+});
+
+console.log(embedding);
+```
+
 ## API Documentation
 
 Once the server is running, you can access:
