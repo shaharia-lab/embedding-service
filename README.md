@@ -54,6 +54,19 @@ Once running, the API will be available at `http://localhost:8000`. You can visi
 
 ### Generate Embeddings
 
+#### Using cURL
+
+```bash
+curl -X POST http://localhost:8000/v1/embeddings \
+-H "Content-Type: application/json" \
+-d '{
+    "input": "Hello world",
+    "model": "all-MiniLM-L6-v2"
+}'
+```
+
+#### Using Python
+
 ```python
 import requests
 
