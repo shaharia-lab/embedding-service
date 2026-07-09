@@ -4,7 +4,7 @@ A FastAPI-based service that provides text embeddings using various Sentence Tra
 
 ## Features
 
-- Multiple model support (`all-MiniLM-L6-v2`, `all-mpnet-base-v2`, `paraphrase-multilingual-MiniLM-L12-v2`)
+- Multiple model support (`all-MiniLM-L6-v2`, `all-mpnet-base-v2`, `paraphrase-multilingual-MiniLM-L12-v2`, and the 1024-dimension `mixedbread-ai/mxbai-embed-large-v1`)
 - OpenAI-compatible API format
 - Batched inference support
 - Docker support
@@ -87,6 +87,19 @@ embeddings = response.json()
 payload = {
     "input": ["Hello world", "Another text"],
     "model": "all-MiniLM-L6-v2"
+}
+```
+
+### Higher-quality 1024-dimension embeddings
+
+For higher-quality embeddings, use `mixedbread-ai/mxbai-embed-large-v1`, which
+outputs 1024-dimension vectors. It is referenced by its full Hugging Face path
+because it lives under the `mixedbread-ai` org rather than `sentence-transformers`:
+
+```python
+payload = {
+    "input": "Hello world",
+    "model": "mixedbread-ai/mxbai-embed-large-v1"
 }
 ```
 

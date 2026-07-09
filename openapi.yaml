@@ -73,6 +73,7 @@ components:
             - all-MiniLM-L6-v2
             - all-mpnet-base-v2
             - paraphrase-multilingual-MiniLM-L12-v2
+            - mixedbread-ai/mxbai-embed-large-v1
           description: ID of the model to use for embedding
         encoding_format:
           type: string

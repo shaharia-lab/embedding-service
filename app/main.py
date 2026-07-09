@@ -11,7 +11,8 @@ app = FastAPI(title="Code Embedding Service")
 ALLOWED_MODELS = [
     'all-MiniLM-L6-v2',
     'all-mpnet-base-v2',
-    'paraphrase-multilingual-MiniLM-L12-v2'
+    'paraphrase-multilingual-MiniLM-L12-v2',
+    'mixedbread-ai/mxbai-embed-large-v1'
 ]
 
 # Default model
@@ -21,7 +22,13 @@ DEFAULT_MODEL = 'all-MiniLM-L6-v2'
 MODEL_PREFIX = 'sentence-transformers/'
 
 def get_full_model_path(model_id: str) -> str:
-    """Convert short model ID to full path."""
+    """Convert short model ID to full path.
+
+    Model ids that already include an org prefix (i.e. contain a '/') are
+    returned unchanged; bare ids are assumed to live under MODEL_PREFIX.
+    """
+    if '/' in model_id:
+        return model_id
     return f"{MODEL_PREFIX}{model_id}"
 
 # Load model and tokenizer globally for reuse

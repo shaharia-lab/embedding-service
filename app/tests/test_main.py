@@ -1,6 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
-from app.main import app, ALLOWED_MODELS, DEFAULT_MODEL
+from app.main import app, ALLOWED_MODELS, DEFAULT_MODEL, MODEL_PREFIX, get_full_model_path
 import numpy as np
 from unittest.mock import patch, MagicMock
 
@@ -26,6 +26,7 @@ INVALID_INPUTS = [
 MODEL_TESTS = [
     ("default model", DEFAULT_MODEL, 200),
     ("alternative valid model", "all-mpnet-base-v2", 200),
+    ("1024-dim org-prefixed model", "mixedbread-ai/mxbai-embed-large-v1", 200),
     ("invalid model", "invalid-model", 422),  # Changed to 422 to match FastAPI's validation
 ]
 
@@ -130,6 +131,15 @@ def test_usage_calculation(mock_sentence_transformer, mock_tokenizer):
     assert "total_tokens" in usage
     assert usage["prompt_tokens"] == usage["total_tokens"]
     assert isinstance(usage["prompt_tokens"], int)
+
+
+def test_get_full_model_path_prepends_prefix_for_bare_id():
+    assert get_full_model_path("all-MiniLM-L6-v2") == f"{MODEL_PREFIX}all-MiniLM-L6-v2"
+
+
+def test_get_full_model_path_keeps_org_prefixed_id():
+    model_id = "mixedbread-ai/mxbai-embed-large-v1"
+    assert get_full_model_path(model_id) == model_id
 
 
 def test_model_switching(mock_sentence_transformer, mock_tokenizer):
