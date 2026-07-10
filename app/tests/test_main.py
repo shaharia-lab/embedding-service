@@ -312,3 +312,20 @@ def test_concurrent_model_switches_stay_consistent(mock_tokenizer):
         assert all(r.status_code == 200 for r in responses)
         # the loaded model must always match what current_model_id claims
         assert app_main.model._loaded_path == get_full_model_path(app_main.current_model_id)
+
+
+def test_preload_models_warms_only_valid_non_default_models():
+    with patch('app.main.SentenceTransformer') as mock_st, \
+            patch('app.main.AutoTokenizer') as mock_tok, \
+            patch.object(app_main, 'current_model_id', DEFAULT_MODEL):
+        app_main._preload_models([" all-mpnet-base-v2 ", "not-a-model", "", " ", DEFAULT_MODEL])
+        mock_st.assert_called_once_with(f"{MODEL_PREFIX}all-mpnet-base-v2")
+        mock_tok.from_pretrained.assert_called_once_with(f"{MODEL_PREFIX}all-mpnet-base-v2")
+
+
+def test_preload_models_noop_on_empty_env():
+    with patch('app.main.SentenceTransformer') as mock_st, \
+            patch('app.main.AutoTokenizer') as mock_tok:
+        app_main._preload_models("".split(","))  # mirrors unset PRELOAD_MODELS
+        mock_st.assert_not_called()
+        mock_tok.from_pretrained.assert_not_called()

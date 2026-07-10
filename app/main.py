@@ -55,6 +55,28 @@ tokenizer = AutoTokenizer.from_pretrained(get_full_model_path(DEFAULT_MODEL))
 model_lock = asyncio.Lock()
 
 
+def _preload_models(model_ids: List[str]) -> None:
+    """Warm the on-disk cache for extra models at startup so the first request
+    that switches to them pays a ~2s disk load instead of a network download
+    (which can exceed REQUEST_TIMEOUT_SECONDS). Instances are discarded —
+    only the default model stays resident."""
+    for model_id in model_ids:
+        model_id = model_id.strip()
+        if not model_id:
+            continue
+        if model_id not in ALLOWED_MODELS:
+            print(f"WARNING: PRELOAD_MODELS entry '{model_id}' is not an allowed model; skipping")
+            continue
+        if model_id == current_model_id:
+            continue
+        full_model_path = get_full_model_path(model_id)
+        SentenceTransformer(full_model_path)
+        AutoTokenizer.from_pretrained(full_model_path)
+
+
+_preload_models(os.environ.get("PRELOAD_MODELS", "").split(","))
+
+
 @app.middleware("http")
 async def timeout_middleware(request: Request, call_next):
     # Bounds client-observed latency only: cancellation cannot kill an

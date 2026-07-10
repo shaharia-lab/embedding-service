@@ -134,6 +134,17 @@ All settings are environment variables with safe defaults:
 | `MAX_INPUT_CHARS` | `8192` | Maximum characters per input string; longer inputs are rejected with `422`. |
 | `MAX_BATCH_SIZE` | `64` | Maximum items per input list; larger batches are rejected with `422`. |
 | `REQUEST_TIMEOUT_SECONDS` | `30` | Requests exceeding this return `504` instead of hanging. |
+| `PRELOAD_MODELS` | *(empty)* | Comma-separated allowed model IDs whose files are downloaded to disk **during startup**, so the first request that switches to them loads from disk (~2s) instead of downloading over the network (which can exceed the request timeout). Only the default model stays in memory. |
+| `HF_HUB_OFFLINE` | *(unset)* | Set to `1` in airgapped deployments (or when only baked/preloaded models are used): skips HuggingFace online checks, which otherwise stall boot for minutes when no network is reachable. |
+
+The default model (`all-MiniLM-L6-v2`) is baked into the Docker image, so
+containers boot in seconds with no network access. Example — also warm the
+1024-dim model at boot:
+
+```bash
+docker run -p 8000:8000 -e PRELOAD_MODELS=mixedbread-ai/mxbai-embed-large-v1 \
+  ghcr.io/shaharia-lab/embedding-service:latest
+```
 
 Input longer than the model's max sequence length is truncated server-side
 before embedding, and the reported `prompt_tokens` reflects the truncated
