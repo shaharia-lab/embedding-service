@@ -333,7 +333,6 @@ def test_preload_models_noop_on_empty_env():
 
 # --- Issue #12 regressions: chunked encode, deadline between chunks, concurrency gate ---
 
-from app.main import ENCODE_CHUNK_SIZE
 
 
 def test_chunked_encode_preserves_order_and_calls_per_chunk(monkeypatch):
