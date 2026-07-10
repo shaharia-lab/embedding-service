@@ -15,6 +15,8 @@ MAX_INPUT_CHARS = int(os.environ.get("MAX_INPUT_CHARS", "8192"))
 MAX_BATCH_SIZE = int(os.environ.get("MAX_BATCH_SIZE", "64"))
 REQUEST_TIMEOUT_SECONDS = float(os.environ.get("REQUEST_TIMEOUT_SECONDS", "30"))
 TORCH_NUM_THREADS = int(os.environ.get("TORCH_NUM_THREADS", "4"))
+ENCODE_CHUNK_SIZE = int(os.environ.get("ENCODE_CHUNK_SIZE", "8"))
+MAX_CONCURRENT_INFERENCE = int(os.environ.get("MAX_CONCURRENT_INFERENCE", "1"))
 
 # Left unpinned, torch/BLAS grab every visible core even while idle
 torch.set_num_threads(TORCH_NUM_THREADS)
@@ -53,6 +55,10 @@ tokenizer = AutoTokenizer.from_pretrained(get_full_model_path(DEFAULT_MODEL))
 # Guards the model/tokenizer globals: once encode() runs off the event loop,
 # requests interleave and an unlocked swap is a real data race
 model_lock = asyncio.Lock()
+
+# CPU inference gains nothing from concurrent encodes sharing the same torch
+# thread pool; the gate makes retries queue instead of stacking computations
+inference_semaphore = asyncio.Semaphore(MAX_CONCURRENT_INFERENCE)
 
 
 def _preload_models(model_ids: List[str]) -> None:
@@ -169,10 +175,15 @@ def create_usage_info(texts: List[str], active_tokenizer, max_seq_length: int) -
     )
 
 @app.post("/v1/embeddings", response_model=EmbeddingResponse)
-async def create_embedding(request: EmbeddingRequest):
+async def create_embedding(request: EmbeddingRequest, http_request: Request):
     try:
         # Handle both single string and list of strings
         inputs = request.input if isinstance(request.input, list) else [request.input]
+
+        # The timeout middleware can only cancel the request, never a thread
+        # already computing — so the encode loop below re-checks this deadline
+        # between chunks and abandons the rest itself
+        deadline = asyncio.get_running_loop().time() + REQUEST_TIMEOUT_SECONDS
 
         # Snapshot a consistent (model, tokenizer) pair under the lock;
         # reloads run in a thread so the event loop stays responsive
@@ -188,16 +199,25 @@ async def create_embedding(request: EmbeddingRequest):
             active_model, active_tokenizer = model, tokenizer
 
         # Run inference off the event loop so healthchecks and other requests
-        # are never blocked by a slow forward pass
-        embeddings = await asyncio.to_thread(active_model.encode, inputs)
-
-        # Convert to list format if it's a single embedding
-        if len(inputs) == 1:
-            embeddings = [embeddings]
+        # are never blocked by a slow forward pass. Chunking bounds the work
+        # orphaned by a timeout to a single chunk instead of the whole batch.
+        async with inference_semaphore:
+            embedding_rows = []
+            for start in range(0, len(inputs), ENCODE_CHUNK_SIZE):
+                if asyncio.get_running_loop().time() >= deadline:
+                    raise HTTPException(
+                        status_code=504,
+                        detail=f"Request exceeded the {REQUEST_TIMEOUT_SECONDS}s timeout",
+                    )
+                if await http_request.is_disconnected():
+                    raise HTTPException(status_code=499, detail="Client disconnected")
+                chunk = inputs[start:start + ENCODE_CHUNK_SIZE]
+                chunk_embeddings = await asyncio.to_thread(active_model.encode, chunk)
+                embedding_rows.extend(np.atleast_2d(np.asarray(chunk_embeddings)))
 
         # Create embedding objects
         embedding_objects = []
-        for idx, embedding in enumerate(embeddings):
+        for idx, embedding in enumerate(embedding_rows):
             embedding_list = [float(x) for x in embedding.flatten()]
             obj = EmbeddingObject(
                 embedding=embedding_list,
@@ -213,6 +233,8 @@ async def create_embedding(request: EmbeddingRequest):
             model=request.model,
             usage=usage
         )
+    except HTTPException:
+        raise
     except ValueError as ve:
         raise HTTPException(status_code=422, detail=str(ve))
     except Exception as e:
