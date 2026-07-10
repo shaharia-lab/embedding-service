@@ -28,4 +28,12 @@ COPY app/ ./app/
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Pin BLAS/OpenMP threads so idle CPU stays bounded; tune per host.
+# Each uvicorn worker loads its own model copy — lower UVICORN_WORKERS to 1
+# on memory-constrained hosts, especially with mixedbread-ai/mxbai-embed-large-v1.
+ENV OMP_NUM_THREADS=4 \
+    MKL_NUM_THREADS=4 \
+    UVICORN_WORKERS=2
+
+# Shell form so UVICORN_WORKERS expands; sh exec's uvicorn as PID 1
+CMD uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${UVICORN_WORKERS}

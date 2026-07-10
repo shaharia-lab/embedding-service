@@ -35,6 +35,15 @@ paths:
                 properties:
                   detail:
                     type: string
+        '504':
+          description: Request exceeded the configured timeout (REQUEST_TIMEOUT_SECONDS)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
 
   /health:
     get:
@@ -65,7 +74,12 @@ components:
             - type: array
               items:
                 type: string
-          description: The text to embed. Can be a string or an array of strings.
+          description: >-
+            The text to embed. Can be a string or an array of strings.
+            Each string is limited to MAX_INPUT_CHARS characters (default 8192)
+            and arrays to MAX_BATCH_SIZE items (default 64); oversized inputs
+            are rejected with 422. Text longer than the model's max sequence
+            length is truncated before embedding.
         model:
           type: string
           default: all-MiniLM-L6-v2

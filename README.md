@@ -122,6 +122,35 @@ const embedding = await openai.embeddings.create({
 console.log(embedding);
 ```
 
+## Configuration
+
+All settings are environment variables with safe defaults:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `UVICORN_WORKERS` | `2` | Number of uvicorn worker processes (Docker image only). **Each worker loads its own copy of the model** — set to `1` on memory-constrained hosts, especially when using `mixedbread-ai/mxbai-embed-large-v1` (~1.3 GB per worker). |
+| `TORCH_NUM_THREADS` | `4` | Threads torch uses per worker for inference. |
+| `OMP_NUM_THREADS` / `MKL_NUM_THREADS` | `4` | Caps BLAS/OpenMP threads so the service doesn't consume every visible core while idle. |
+| `MAX_INPUT_CHARS` | `8192` | Maximum characters per input string; longer inputs are rejected with `422`. |
+| `MAX_BATCH_SIZE` | `64` | Maximum items per input list; larger batches are rejected with `422`. |
+| `REQUEST_TIMEOUT_SECONDS` | `30` | Requests exceeding this return `504` instead of hanging. |
+
+Input longer than the model's max sequence length is truncated server-side
+before embedding, and the reported `prompt_tokens` reflects the truncated
+(actually processed) token count.
+
+### Container healthchecks
+
+Point healthchecks at the dedicated `GET /health` endpoint (not `/docs`):
+
+```yaml
+healthcheck:
+  test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=4)\""]
+  interval: 30s
+  timeout: 5s
+  retries: 3
+```
+
 ## API Documentation
 
 Once the server is running, you can access:
