@@ -133,7 +133,9 @@ All settings are environment variables with safe defaults:
 | `OMP_NUM_THREADS` / `MKL_NUM_THREADS` | `4` | Caps BLAS/OpenMP threads so the service doesn't consume every visible core while idle. |
 | `MAX_INPUT_CHARS` | `8192` | Maximum characters per input string; longer inputs are rejected with `422`. |
 | `MAX_BATCH_SIZE` | `64` | Maximum items per input list; larger batches are rejected with `422`. |
-| `REQUEST_TIMEOUT_SECONDS` | `30` | Requests exceeding this return `504` instead of hanging. |
+| `REQUEST_TIMEOUT_SECONDS` | `30` | Requests exceeding this return `504` instead of hanging. The encode loop re-checks the deadline between chunks, so a timed-out request stops computing within one chunk instead of orphaning the whole batch. |
+| `ENCODE_CHUNK_SIZE` | `8` | Inputs are encoded in sub-batches of this size, with timeout/disconnect checks between chunks. Bounds how much CPU work a cancelled request can leave running. |
+| `MAX_CONCURRENT_INFERENCE` | `1` | Encodes running concurrently per worker. Additional requests queue (without burning CPU) instead of thrashing the shared torch thread pool — a client retrying timed-out requests can no longer stack computations. |
 | `PRELOAD_MODELS` | *(empty)* | Comma-separated allowed model IDs whose files are downloaded to disk **during startup**, so the first request that switches to them loads from disk (~2s) instead of downloading over the network (which can exceed the request timeout). Only the default model stays in memory. |
 | `HF_HUB_OFFLINE` | *(unset)* | Set to `1` in airgapped deployments (or when only baked/preloaded models are used): skips HuggingFace online checks, which otherwise stall boot for minutes when no network is reachable. |
 

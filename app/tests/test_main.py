@@ -218,7 +218,7 @@ def test_batch_over_max_size_rejected():
 
 def test_batch_at_max_size_accepted():
     batch = ["hi"] * MAX_BATCH_SIZE
-    with patched_default_model(encode_return=np.array([MOCK_EMBEDDING for _ in batch])):
+    with patched_default_model(encode_side_effect=lambda chunk: np.array([MOCK_EMBEDDING for _ in chunk])):
         response = client.post(
             "/v1/embeddings",
             json={"input": batch, "model": DEFAULT_MODEL}
@@ -329,3 +329,90 @@ def test_preload_models_noop_on_empty_env():
         app_main._preload_models("".split(","))  # mirrors unset PRELOAD_MODELS
         mock_st.assert_not_called()
         mock_tok.from_pretrained.assert_not_called()
+
+
+# --- Issue #12 regressions: chunked encode, deadline between chunks, concurrency gate ---
+
+from app.main import ENCODE_CHUNK_SIZE
+
+
+def test_chunked_encode_preserves_order_and_calls_per_chunk(monkeypatch):
+    monkeypatch.setattr(app_main, 'ENCODE_CHUNK_SIZE', 8)
+    chunk_sizes = []
+
+    def chunked_encode(chunk, **kwargs):
+        chunk_sizes.append(len(chunk))
+        # unique value per item so order is verifiable end-to-end
+        return np.array([[float(text.split("-")[1])] * 4 for text in chunk])
+
+    with patched_default_model(encode_side_effect=chunked_encode):
+        response = client.post(
+            "/v1/embeddings",
+            json={"input": [f"item-{i}" for i in range(20)], "model": DEFAULT_MODEL}
+        )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert chunk_sizes == [8, 8, 4]
+    assert len(data) == 20
+    assert all(d["embedding"][0] == float(i) for i, d in enumerate(data))
+    assert all(d["index"] == i for i, d in enumerate(data))
+
+
+def test_deadline_abandons_remaining_chunks(monkeypatch):
+    """After the request deadline passes, no further chunks may be encoded —
+    this is the orphaned-CPU regression from issue #12."""
+    monkeypatch.setattr(app_main, 'REQUEST_TIMEOUT_SECONDS', 0.5)
+    monkeypatch.setattr(app_main, 'ENCODE_CHUNK_SIZE', 1)
+    encode_calls = []
+
+    def slow_chunk(chunk, **kwargs):
+        encode_calls.append(time.monotonic())
+        time.sleep(0.2)
+        return np.array([MOCK_EMBEDDING for _ in chunk])
+
+    with patched_default_model(encode_side_effect=slow_chunk):
+        with TestClient(app) as live_client:
+            response = live_client.post(
+                "/v1/embeddings",
+                json={"input": ["x"] * 10, "model": DEFAULT_MODEL}
+            )
+        calls_at_response = len(encode_calls)
+        time.sleep(1.0)  # if chunks were still running, this would keep growing
+        assert response.status_code == 504
+        assert calls_at_response < 10, "all chunks ran despite the deadline"
+        assert len(encode_calls) <= calls_at_response + 1, \
+            "encoding continued after the 504 was returned"
+
+
+def test_inference_concurrency_never_exceeds_gate():
+    state = {"active": 0, "max_active": 0}
+    state_lock = threading.Lock()
+
+    def tracked_encode(chunk, **kwargs):
+        with state_lock:
+            state["active"] += 1
+            state["max_active"] = max(state["max_active"], state["active"])
+        time.sleep(0.15)
+        with state_lock:
+            state["active"] -= 1
+        return np.array([MOCK_EMBEDDING for _ in chunk])
+
+    with patched_default_model(encode_side_effect=tracked_encode):
+        with TestClient(app) as live_client:
+            responses = []
+
+            def post():
+                responses.append(live_client.post(
+                    "/v1/embeddings",
+                    json={"input": "hello", "model": DEFAULT_MODEL}
+                ))
+
+            threads = [threading.Thread(target=post) for _ in range(4)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join(timeout=15)
+
+    assert len(responses) == 4
+    assert all(r.status_code == 200 for r in responses)
+    assert state["max_active"] <= app_main.MAX_CONCURRENT_INFERENCE
