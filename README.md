@@ -1,5 +1,8 @@
 # Embedding Service
 
+> [!IMPORTANT]
+> **This repository is archived and no longer maintained.** For running a blazing-fast local embedding service, we recommend using [Hugging Face Text Embeddings Inference (TEI)](https://github.com/huggingface/text-embeddings-inference) instead.
+
 A FastAPI-based service that provides text embeddings using various Sentence Transformer models. This service offers a simple API to generate embeddings for text inputs, supporting both single strings and batches.
 
 ## Features
